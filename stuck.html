@@ -42,6 +42,7 @@ function removeAllChildren(elem) {
 }
 
 function intersectRayCircle(origin, dir, center, radius) {
+    // based on http://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
     var ox = origin.x - center.x;
     var oy = origin.y - center.y;
     var od = ox*dir.x + oy*dir.y;
