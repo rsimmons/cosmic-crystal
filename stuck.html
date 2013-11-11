@@ -72,12 +72,13 @@ function intersectRayCircle(origin, dir, center, radius) {
     }
 }
 
-function Colony() {
+function Colony(colorPattern) {
     // support instantiation without "new"
     if (!(this instanceof Colony)) {
-        return new Colony();
+        return new Colony(colorPattern);
     }
 
+    this.colorPattern = colorPattern;
     this.cells = [];
     this.colonyRadius = 0;
 }
@@ -86,18 +87,18 @@ Colony.prototype = {
     tryAttachCell: function() {
         if (this.cells.length === 0) {
             var firstRadius = 1;
-            var c = {x: 0, y: 0, r: firstRadius};
+            var c = {x: 0, y: 0, r: firstRadius, color: this.colorPattern.random()};
             this.cells.push(c);
             this.colonyRadius = firstRadius;
             return c;
         }
 
-        // var theta = 2.0*Math.PI*Math.random(); // incoming direction
-        var theta = 0.005*this.cells.length;
+        var theta = 2.0*Math.PI*Math.random(); // incoming direction
+        // var theta = 0.005*this.cells.length;
         // var theta = 0;
         var dirX = Math.cos(theta);
         var dirY = Math.sin(theta);
-        var r = 0.75; //Math.random() + 0.2;
+        var r = 0.5*Math.random() + 0.125;
 
         var adjColonyRadius = this.colonyRadius + r;
 
@@ -110,6 +111,7 @@ Colony.prototype = {
         // console.log(origX, origY, dirX, dirY, r);
 
         var minT;
+        var minTCell;
         for (var i = 0; i < this.cells.length; i++) {
             var existing = this.cells[i];
             var sumR = existing.r + r;
@@ -119,6 +121,7 @@ Colony.prototype = {
                 // intersection
                 if ((minT === undefined) || (t < minT)) {
                     minT = t;
+                    minTCell = existing;
                 }
             }
         }
@@ -127,8 +130,11 @@ Colony.prototype = {
             // didn't hit any existing cells
             return null;
         } else {
+            // figure out color
+            var newColor = this.colorPattern.perturb(minTCell.color);
+
             // hit an existing cell
-            var attaching = {x: origX + minT*dirX, y: origY + minT*dirY, r: r};
+            var attaching = {x: origX + minT*dirX, y: origY + minT*dirY, r: r, color: newColor};
             this.cells.push(attaching);
 
             // possibly update colony radius
@@ -142,10 +148,53 @@ Colony.prototype = {
     },
 }
 
+function hsvToRgb(h, s, v) {
+    // assumes h, s, and v are all in [0,1]
+    // based on http://en.wikipedia.org/wiki/HSL_and_HSV
+    var c = v*s;
+    var hp = (h*6) % 6;
+    var x = c*(1 - Math.abs((hp % 2) - 1));
+
+    var r, g, b;
+    if (hp < 1) {
+        r = c; g = x; b = 0;
+    } else if (hp < 2) {
+        r = x; g = c; b = 0;
+    } else if (hp < 3) {
+        r = 0; g = c; b = x;
+    } else if (hp < 4) {
+        r = 0; g = x; b = c;
+    } else if (hp < 5) {
+        r = x; g = 0; b = c;
+    } else {
+        // assert(hp < 6);
+        r = c; g = 0; b = x;
+    }
+
+    var m = v - c;
+    r += m; g += m; b += m;
+
+    return {r: r, g: g, b: b};
+}
+
+var HueShiftPattern = {
+    random: function() {
+        return Math.random();
+    },
+
+    perturb: function(c) {
+        return ((c + 0.05*(Math.random()-0.5)) + 1) % 1;
+    },
+
+    toRgb: function(c) {
+        return hsvToRgb(c, 1.0, 0.75);
+    },
+}
+
 document.addEventListener("DOMContentLoaded", function() {
     var rootSVGElem = svgElem("svg", {version: "1.1"});
 
-    var bg = svgElem("rect", {x: "0", y: "0", width: "100%", height: "100%", fill: "grey", stroke: "none"});
+    var bg = svgElem("rect", {x: "0", y: "0", width: "100%", height: "100%", fill: "rgb(100,100,100)", stroke: "none"});
     rootSVGElem.appendChild(bg);
 
     var innerSVGElem = svgElem("svg", {version: "1.1", viewBox: "-60 -60 120 120"});
@@ -159,7 +208,9 @@ document.addEventListener("DOMContentLoaded", function() {
             // console.log("miss");
         } else {
             // console.log("hit");
-            var circ = svgElem("circle", {cx: c.x, cy: c.y, r: c.r, fill: "lightgrey", stroke: "black", "stroke-width": "0.1"});
+            var rgb = colony.colorPattern.toRgb(c.color);
+            var rgbStr = "rgb(" + Math.floor(255*rgb.r) + "," + Math.floor(255*rgb.g) + "," + Math.floor(255*rgb.b) + ")";
+            var circ = svgElem("circle", {cx: c.x, cy: c.y, r: c.r, fill: rgbStr, stroke: "black", "stroke-width": "0.1"});
             innerSVGElem.appendChild(circ);
         }
     }
@@ -170,7 +221,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function startColony() {
-        colony = Colony();
+        colony = Colony(HueShiftPattern);
         attachDrawCell(); // first one
         updateCellCount();
     }
