@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SVG test2</title>
+<meta name="viewport" content="width=device-width">
+<style type="text/css">
+body {overflow:hidden;font-family:sans-serif;}
+#main {display:block;position:fixed;top:0;left:0;height:100%;width:100%;box-sizing:border-box}
+#control-panel {display:block;position:fixed;top:0;right:0;padding:5px;box-sizing:border-box}
+#control-buttons {float:right}
+#runstop-button {width:5em}
+#cellcount {float:right}
+</style>
+</head>
+<body>
+<div id="main"></div>
+<div id="control-panel"><div id="control-buttons"><button id="runstop-button"></button><button id="reset-button">Reset</button></div><div><span id="cellcount"><span id="cellcount-number">0</span> cells</span></div></div>
+<script>
+"use strict";
+
+var SVGNS = "http://www.w3.org/2000/svg";
+
+function svgElem(name, attrs) {
+    var elem = document.createElementNS(SVGNS, name);
+
+    if (attrs) {
+        for (var k in attrs) {
+            if (attrs.hasOwnProperty(k)) {
+                elem.setAttributeNS(null, k, attrs[k]);
+            }
+        }
+    }
+
+    return elem;
+}
+
+function removeAllChildren(elem) {
+    while (elem.hasChildNodes()) {
+        elem.removeChild(elem.childNodes[0]);
+    }
+}
+
+function intersectRayCircle(origin, dir, center, radius) {
+    var ox = origin.x - center.x;
+    var oy = origin.y - center.y;
+    var od = ox*dir.x + oy*dir.y;
+    var oo = ox*ox + oy*oy;
+    var disc = od*od - oo + radius*radius;
+
+    if (disc < 0) {
+        // no intersection
+        return null;
+    } else {
+        // one or two points of intersection, but not sure if they are ahead of ray start (t >= 0).
+        // rare case of one point is handled fine by two-point code.
+        var sqrDisc = Math.sqrt(disc);
+
+        var t0 = -od - sqrDisc;
+        if (t0 >= 0) {
+            return t0;
+        } else {
+            var t1 = -od + sqrDisc;
+            if (t1 >= 0) {
+                return t1;
+            } else {
+                // both points of intersection behind ray start
+                return null;
+            }
+        }
+    }
+}
+
+function Colony() {
+    // support instantiation without "new"
+    if (!(this instanceof Colony)) {
+        return new Colony();
+    }
+
+    this.cells = [];
+    this.colonyRadius = 0;
+}
+
+Colony.prototype = {
+    tryAttachCell: function() {
+        if (this.cells.length === 0) {
+            var firstRadius = 1;
+            var c = {x: 0, y: 0, r: firstRadius};
+            this.cells.push(c);
+            this.colonyRadius = firstRadius;
+            return c;
+        }
+
+        // var theta = 2.0*Math.PI*Math.random(); // incoming direction
+        var theta = 0.005*this.cells.length;
+        // var theta = 0;
+        var dirX = Math.cos(theta);
+        var dirY = Math.sin(theta);
+        var r = 0.75; //Math.random() + 0.2;
+
+        var adjColonyRadius = this.colonyRadius + r;
+
+        var origX = -dirX*adjColonyRadius;
+        var origY = -dirY*adjColonyRadius;
+
+        var lateral = adjColonyRadius*2.0*(Math.random() - 0.5);
+        origX += -dirY*lateral;
+        origY += dirX*lateral;
+        // console.log(origX, origY, dirX, dirY, r);
+
+        var minT;
+        for (var i = 0; i < this.cells.length; i++) {
+            var existing = this.cells[i];
+            var sumR = existing.r + r;
+
+            var t = intersectRayCircle({x: origX, y: origY}, {x: dirX, y: dirY}, {x: existing.x, y: existing.y}, sumR);
+            if (t !== null) {
+                // intersection
+                if ((minT === undefined) || (t < minT)) {
+                    minT = t;
+                }
+            }
+        }
+
+        if (minT === undefined) {
+            // didn't hit any existing cells
+            return null;
+        } else {
+            // hit an existing cell
+            var attaching = {x: origX + minT*dirX, y: origY + minT*dirY, r: r};
+            this.cells.push(attaching);
+
+            // possibly update colony radius
+            var dist = Math.sqrt(origX*origX + origY*origY) + r; // distance from origin to outside edge of new cell
+            if (dist > this.colonyRadius) {
+                this.colonyRadius = dist;
+            }
+
+            return attaching;
+        }
+    },
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    var rootSVGElem = svgElem("svg", {version: "1.1"});
+
+    var bg = svgElem("rect", {x: "0", y: "0", width: "100%", height: "100%", fill: "grey", stroke: "none"});
+    rootSVGElem.appendChild(bg);
+
+    var innerSVGElem = svgElem("svg", {version: "1.1", viewBox: "-60 -60 120 120"});
+    rootSVGElem.appendChild(innerSVGElem);
+
+    var colony;
+
+    function attachDrawCell() {
+        var c = colony.tryAttachCell();
+        if (c === null) {
+            // console.log("miss");
+        } else {
+            // console.log("hit");
+            var circ = svgElem("circle", {cx: c.x, cy: c.y, r: c.r, fill: "lightgrey", stroke: "black", "stroke-width": "0.1"});
+            innerSVGElem.appendChild(circ);
+        }
+    }
+
+    var cellcountNumber = document.getElementById("cellcount-number");
+    function updateCellCount() {
+        cellcountNumber.textContent = colony.cells.length.toString();
+    }
+
+    function startColony() {
+        colony = Colony();
+        attachDrawCell(); // first one
+        updateCellCount();
+    }
+
+    startColony();
+
+    document.getElementById("main").appendChild(rootSVGElem);
+
+    // updating stuff
+    var runstopButton = document.getElementById("runstop-button");
+    var running = true;
+
+    function runningFunc() {
+        for (var i = 0; i < 100; i++) {
+            attachDrawCell();
+        }
+        updateCellCount();
+        if (running) {
+            setTimeout(runningFunc, 0);
+        }
+    };
+
+    function setRunning(r) {
+        if (r) {
+            running = true;
+            setTimeout(runningFunc, 0);
+            runstopButton.textContent = "Stop";
+        } else {
+            running = false;
+            runstopButton.textContent = "Run";
+        }
+    }
+
+    setRunning(true);
+
+    runstopButton.addEventListener("click", function (e) {
+        if (running) {
+            setRunning(false);
+        } else {
+            setRunning(true);
+        }
+    }, false);
+
+    document.getElementById("reset-button").addEventListener("click", function (e) {
+        removeAllChildren(innerSVGElem);
+        startColony();
+    }, false);
+}, false);
+</script>
+</body>
+</html>
