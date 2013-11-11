@@ -200,6 +200,11 @@ document.addEventListener("DOMContentLoaded", function() {
     var innerSVGElem = svgElem("svg", {version: "1.1", viewBox: "-60 -60 120 120"});
     rootSVGElem.appendChild(innerSVGElem);
 
+    var zoomGroupElem = svgElem("g");
+    innerSVGElem.appendChild(zoomGroupElem);
+
+    var cellContainerElem = zoomGroupElem;
+
     var colony;
 
     function attachDrawCell() {
@@ -211,7 +216,7 @@ document.addEventListener("DOMContentLoaded", function() {
             var rgb = colony.colorPattern.toRgb(c.color);
             var rgbStr = "rgb(" + Math.floor(255*rgb.r) + "," + Math.floor(255*rgb.g) + "," + Math.floor(255*rgb.b) + ")";
             var circ = svgElem("circle", {cx: c.x, cy: c.y, r: c.r, fill: rgbStr, stroke: "black", "stroke-width": "0.1"});
-            innerSVGElem.appendChild(circ);
+            cellContainerElem.appendChild(circ);
         }
     }
 
@@ -266,9 +271,34 @@ document.addEventListener("DOMContentLoaded", function() {
     }, false);
 
     document.getElementById("reset-button").addEventListener("click", function (e) {
-        removeAllChildren(innerSVGElem);
+        removeAllChildren(cellContainerElem);
         startColony();
     }, false);
+
+    // zooming
+    var dragElement = rootSVGElem;
+    var dragPrev = null;
+    var sumY = 0;
+
+    function setZoom(zoom) {
+        zoomGroupElem.setAttributeNS(null, "transform", "scale(" + zoom + ")");
+    }
+
+    function dragFunc(e) {
+        var dy = e.pageY - dragPrev.y;
+        sumY += dy;
+        setZoom(Math.exp(-0.01*sumY));
+        dragPrev = {x: e.pageX, y: e.pageY};
+    }
+
+    dragElement.addEventListener("mousedown", function (e) {
+        dragPrev = {x: e.pageX, y: e.pageY};
+        dragElement.addEventListener("mousemove", dragFunc);
+    }, false);
+    dragElement.addEventListener("mouseup", function (e) {
+        dragElement.removeEventListener("mousemove", dragFunc);
+    }, false);
+
 }, false);
 </script>
 </body>
