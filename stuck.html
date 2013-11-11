@@ -299,6 +299,20 @@ document.addEventListener("DOMContentLoaded", function() {
         dragElement.removeEventListener("mousemove", dragFunc);
     }, false);
 
+    // toggling control panel
+    var controlPanelElem = document.getElementById("control-panel");
+    var controlPanelShown = true;
+    document.addEventListener("keydown", function(e) {
+        if (e.keyCode === 27) {
+            if (controlPanelShown) {
+                controlPanelElem.setAttribute("style", "display:none");
+            } else {
+                controlPanelElem.setAttribute("style", "display:block");
+            }
+            controlPanelShown = !controlPanelShown;
+        }
+    }, false);
+
 }, false);
 </script>
 </body>
